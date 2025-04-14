@@ -1,0 +1,7 @@
+DROP TABLE IF EXISTS terms;
+CREATE TABLE terms (
+    id INT AUTO_INCREMENT NOT NULL,
+    term VARCHAR(128) NOT NULL,
+    definition VARCHAR(255) NOT NULL,
+    PRIMARY KEY (`id`)
+);
