@@ -8,6 +8,23 @@ import (
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
 )
 
+func newDb(t *testing.T) (DatabaseConn, sqlmock.Sqlmock, func()) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		fmt.Println("failed to open sqlmock database:", err)
+	}
+
+	dbc := DatabaseConn{
+		db:           db,
+		tableName:    "terms",
+		sequenceGaps: make([]int64, 0),
+	}
+
+	return dbc, mock, func() {
+		db.Close()
+	}
+}
+
 func TestFindTerm(t *testing.T) {
 	type args struct {
 		termToFind string
@@ -29,19 +46,9 @@ func TestFindTerm(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
+		dbc, mock, teardown := newDb(t)
+		defer teardown()
 		t.Run(name, func(t *testing.T) {
-			db, mock, err := sqlmock.New()
-			if err != nil {
-				fmt.Println("failed to open sqlmock database:", err)
-			}
-			defer db.Close()
-
-			dbc := DatabaseConn{
-				db:           db,
-				tableName:    "terms",
-				sequenceGaps: make([]int64, 0),
-			}
-
 			mock.ExpectQuery("SELECT id").WillReturnRows(test.wantRows)
 
 			got, err := dbc.findTerm(test.termToFind)
