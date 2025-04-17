@@ -6,7 +6,7 @@ import (
 	"os"
 	"sort"
 
-	dbinterface "github.com/flashcards/database_interface"
+	"github.com/flashcards/dbinterface"
 	"github.com/go-sql-driver/mysql"
 )
 
