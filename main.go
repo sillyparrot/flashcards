@@ -16,14 +16,14 @@ func add(dbc *dbinterface.DatabaseConn) {
 		var input string
 		_, err := fmt.Scan(&input)
 		if err != nil {
-			log.Fatalf("input error %v", err)
+			log.Printf("input error %v", err)
 		}
 		if input == "menu" {
 			return
 		}
 		ids, err := dbinterface.Add(dbc, input)
 		if err != nil {
-			log.Fatal(err)
+			log.Print(err)
 		}
 		if len(ids) > 0 {
 			fmt.Printf("Added IDs: %v\n", ids)
@@ -37,14 +37,14 @@ func delete(dbc *dbinterface.DatabaseConn) {
 		var input string
 		_, err := fmt.Scan(&input)
 		if err != nil {
-			log.Fatalf("input error %v", err)
+			log.Printf("input error %v", err)
 		}
 		if input == "menu" {
 			return
 		}
 		err = dbinterface.Delete(dbc, input)
 		if err != nil {
-			log.Fatal(err)
+			log.Print(err)
 		}
 	}
 }
@@ -67,14 +67,14 @@ func find(dbc *dbinterface.DatabaseConn) {
 		var input string
 		_, err := fmt.Scan(&input)
 		if err != nil {
-			log.Fatalf("input error %v", err)
+			log.Printf("input error %v", err)
 		}
 		if input == "menu" {
 			return
 		}
 		terms, err := dbinterface.Find(dbc, input)
 		if err != nil {
-			log.Fatal(err)
+			log.Print(err)
 		}
 		if len(terms) == 0 {
 			fmt.Printf("no terms found with %s\n", input)
@@ -86,7 +86,7 @@ func find(dbc *dbinterface.DatabaseConn) {
 func list(dbc *dbinterface.DatabaseConn) {
 	terms, err := dbinterface.List(dbc)
 	if err != nil {
-		log.Fatal(err)
+		log.Print(err)
 	}
 	if len(terms) == 0 {
 		fmt.Println("No terms in flashcards database.")

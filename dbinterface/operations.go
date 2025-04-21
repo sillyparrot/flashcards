@@ -94,6 +94,11 @@ func Delete(dbc *DatabaseConn, term string) error {
 }
 
 func Find(dbc *DatabaseConn, term string) (map[int64]TermDef, error) {
+	for _, c := range term {
+		if !unicode.Is(unicode.Han, c) {
+			return nil, fmt.Errorf("Add expecting Chinese characters, got %q", c)
+		}
+	}
 	terms, err := dbc.findAllTermsWithSubstring(term)
 	if err != nil {
 		return nil, fmt.Errorf("Find: %v", err)
