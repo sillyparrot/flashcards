@@ -58,6 +58,15 @@ func (dbc *DatabaseConn) findAllTermsWithSubstring(termToFind string) (map[int64
 }
 
 func (dbc *DatabaseConn) checkForGaps() error {
+	// if table is empty, return
+	empty, err := dbc.tableIsEmpty()
+	if err != nil {
+		return err
+	}
+	if empty {
+		return nil
+	}
+
 	gapQuery := fmt.Sprintf(`WITH RECURSIVE all_ids AS (
 		SELECT MIN(id) AS id
 		FROM %s
@@ -175,4 +184,25 @@ func (dbc *DatabaseConn) listAll() (map[int64]TermDef, error) {
 		return nil, fmt.Errorf("listAll: %v", err)
 	}
 	return allTerms, nil
+}
+
+func (dbc *DatabaseConn) tableIsEmpty() (bool, error) {
+	rows, err := dbc.db.Query(fmt.Sprintf("SELECT id FROM %s LIMIT 1", dbc.tableName))
+	if err != nil {
+		return true, err
+	}
+	defer rows.Close()
+
+	empty := true
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return empty, err
+		}
+		empty = false
+	}
+	if err := rows.Err(); err != nil {
+		return empty, fmt.Errorf("tableIsEmpty: %v", err)
+	}
+	return empty, nil
 }
