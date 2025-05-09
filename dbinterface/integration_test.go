@@ -2,6 +2,7 @@ package dbinterface
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -94,33 +95,71 @@ func TestAdd(t *testing.T) {
 	type args struct {
 		termToAdd string
 		wantResp  []int64
-		wantErr   bool
+		wantErr   any
 	}
 	tests := map[string]args{
 		"success": {
 			termToAdd: "你",
 			wantResp:  []int64{2},
-			wantErr:   false,
+			wantErr:   nil,
 		},
 		"adding duplicate": {
 			termToAdd: "我",
 			wantResp:  nil,
-			wantErr:   false,
+			wantErr:   nil,
 		},
-		"not Chinese character": {
+		"unexpected language": {
 			termToAdd: "c",
 			wantResp:  nil,
-			wantErr:   true,
+			wantErr:   errUnexpectedLanguage{},
 		},
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			got, err := Add(dbc, test.termToAdd)
-			if err != nil && test.wantErr == false {
-				t.Errorf("Got error %q, wanted nil", err.Error())
+			if test.wantErr != nil && !errors.As(err, &test.wantErr) {
+				t.Errorf("Got error %v, wanted %v", err, test.wantErr)
+			} else if test.wantErr == nil && err != nil {
+				t.Errorf("Got error, wanted nil")
 			}
 			if !reflect.DeepEqual(got, test.wantResp) {
 				t.Errorf("Got %v; wanted %v", got, test.wantResp)
+			}
+		})
+	}
+}
+
+func TestDelete(t *testing.T) {
+	type args struct {
+		setup        func(string)
+		termToDelete string
+		wantErr      any
+	}
+	tests := map[string]args{
+		"success": {
+			termToDelete: "你",
+			setup: func(termToAdd string) {
+				_, err := Add(dbc, termToAdd)
+				if err != nil {
+					t.Fatalf("Error when adding term %s", termToAdd)
+				}
+			},
+			wantErr: nil,
+		},
+		"term not found in database": {
+			termToDelete: "爱",
+			setup:        func(string) {},
+			wantErr:      errNotFound{},
+		},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			test.setup(test.termToDelete)
+			err := Delete(dbc, test.termToDelete)
+			if test.wantErr != nil && !errors.As(err, &test.wantErr) {
+				t.Errorf("Got error %v, wanted %v", err, test.wantErr)
+			} else if test.wantErr == nil && err != nil {
+				t.Errorf("Got error, wanted nil")
 			}
 		})
 	}

@@ -2,6 +2,7 @@ package dbinterface
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"unicode"
 	"unicode/utf8"
@@ -17,12 +18,12 @@ type TermDef struct {
 func Connect(cfg mysql.Config, tableName string) (*DatabaseConn, error) {
 	db, err := sql.Open("mysql", cfg.FormatDSN())
 	if err != nil {
-		return &DatabaseConn{}, fmt.Errorf("Connect error: %v", err)
+		return &DatabaseConn{}, err
 	}
 
 	err = db.Ping()
 	if err != nil {
-		return &DatabaseConn{}, fmt.Errorf("Connect error: %v", err)
+		return &DatabaseConn{}, err
 	}
 	fmt.Println("Connected!")
 
@@ -38,10 +39,20 @@ func Connect(cfg mysql.Config, tableName string) (*DatabaseConn, error) {
 	return databaseConn, nil
 }
 
+func verifyLanguage(term string) error {
+	for _, c := range term {
+		if !unicode.Is(unicode.Han, c) {
+			return &errUnexpectedLanguage{expectedLanguage: "Chinese", term: string(c)}
+		}
+	}
+	return nil
+}
+
 func addIfNotDuplicate(dbc *DatabaseConn, term string) (*int64, error) {
 	foundId, err := dbc.findTerm(term)
-	if err != nil {
-		return nil, fmt.Errorf("Add %q: %v", term, err)
+	var notFound *errNotFound
+	if !errors.As(err, &notFound) && err != nil {
+		return nil, err
 	}
 	if len(foundId) != 0 {
 		fmt.Printf("%q already exists at %v\n", term, foundId)
@@ -50,17 +61,16 @@ func addIfNotDuplicate(dbc *DatabaseConn, term string) (*int64, error) {
 
 	id, err := dbc.addTerm(term)
 	if err != nil {
-		return nil, fmt.Errorf("Add %q: %v", term, err)
+		return nil, err
 	}
 	return &id, nil
 }
 
 func Add(dbc *DatabaseConn, term string) ([]int64, error) {
 	var addedIds []int64
-	for _, c := range term {
-		if !unicode.Is(unicode.Han, c) {
-			return nil, fmt.Errorf("Add expecting Chinese characters, got %q", c)
-		}
+	err := verifyLanguage(term)
+	if err != nil {
+		return nil, err
 	}
 
 	for _, c := range term {
@@ -86,22 +96,27 @@ func Add(dbc *DatabaseConn, term string) ([]int64, error) {
 }
 
 func Delete(dbc *DatabaseConn, term string) error {
-	err := dbc.deleteTerm(term)
+	err := verifyLanguage(term)
 	if err != nil {
-		return fmt.Errorf("DeleteTerm: %v", err)
+		return err
+	}
+
+	err = dbc.deleteTerm(term)
+	if err != nil {
+		return err
 	}
 	return nil
 }
 
 func Find(dbc *DatabaseConn, term string) (map[int64]TermDef, error) {
-	for _, c := range term {
-		if !unicode.Is(unicode.Han, c) {
-			return nil, fmt.Errorf("Add expecting Chinese characters, got %q", c)
-		}
+	err := verifyLanguage(term)
+	if err != nil {
+		return nil, err
 	}
+
 	terms, err := dbc.findAllTermsWithSubstring(term)
 	if err != nil {
-		return nil, fmt.Errorf("Find: %v", err)
+		return nil, err
 	}
 	return terms, nil
 }
@@ -109,7 +124,7 @@ func Find(dbc *DatabaseConn, term string) (map[int64]TermDef, error) {
 func List(dbc *DatabaseConn) (map[int64]TermDef, error) {
 	listAll, err := dbc.listAll()
 	if err != nil {
-		return nil, fmt.Errorf("List: %v", err)
+		return nil, err
 	}
 	return listAll, nil
 }

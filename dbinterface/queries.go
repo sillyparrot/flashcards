@@ -30,6 +30,11 @@ func (dbc *DatabaseConn) findTerm(termToFind string) ([]int64, error) {
 	if err = rows.Err(); err != nil {
 		return nil, fmt.Errorf("findTerm %q: %v", termToFind, err)
 	}
+
+	if len(ids) == 0 {
+		return nil, &errNotFound{term: termToFind}
+	}
+
 	return ids, nil
 }
 
@@ -54,6 +59,11 @@ func (dbc *DatabaseConn) findAllTermsWithSubstring(termToFind string) (map[int64
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("findAllTermsWithSubstring %q: %v", termToFind, err)
 	}
+
+	if len(terms) == 0 {
+		return nil, &errNotFound{term: termToFind}
+	}
+
 	return terms, nil
 }
 
@@ -143,6 +153,7 @@ func (dbc *DatabaseConn) deleteTerm(term string) error {
 	}
 	if len(ids) == 0 {
 		fmt.Printf("Term %q does not exist in database\n", term)
+		return nil
 	}
 	query := fmt.Sprintf("DELETE FROM %s WHERE term='%s'", dbc.tableName, term)
 	result, err := dbc.db.Exec(query)

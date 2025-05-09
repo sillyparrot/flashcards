@@ -23,7 +23,7 @@ func add(dbc *dbinterface.DatabaseConn) {
 		}
 		ids, err := dbinterface.Add(dbc, input)
 		if err != nil {
-			log.Print(err)
+			log.Printf("Add error: %v", err)
 		}
 		if len(ids) > 0 {
 			fmt.Printf("Added IDs: %v\n", ids)
@@ -44,7 +44,7 @@ func delete(dbc *dbinterface.DatabaseConn) {
 		}
 		err = dbinterface.Delete(dbc, input)
 		if err != nil {
-			log.Print(err)
+			log.Printf("Delete error: %v", err)
 		}
 	}
 }
@@ -74,7 +74,7 @@ func find(dbc *dbinterface.DatabaseConn) {
 		}
 		terms, err := dbinterface.Find(dbc, input)
 		if err != nil {
-			log.Print(err)
+			log.Printf("Find error: %v", err)
 		}
 		if len(terms) == 0 {
 			fmt.Printf("no terms found with %s\n", input)
@@ -86,7 +86,7 @@ func find(dbc *dbinterface.DatabaseConn) {
 func list(dbc *dbinterface.DatabaseConn) {
 	terms, err := dbinterface.List(dbc)
 	if err != nil {
-		log.Print(err)
+		log.Printf("List error: %v", err)
 	}
 	if len(terms) == 0 {
 		fmt.Println("No terms in flashcards database.")
@@ -106,7 +106,7 @@ func main() {
 	tableName := "terms"
 	dbc, err := dbinterface.Connect(cfg, tableName)
 	if err != nil {
-		log.Fatalf("%v", err)
+		log.Fatalf("Connect error: %v", err)
 	}
 
 	for {
