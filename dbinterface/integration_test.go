@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"os"
 	"reflect"
 	"testing"
 
@@ -87,8 +86,6 @@ func TestMain(m *testing.M) {
 	m.Run()
 
 	container.Terminate(ctx)
-
-	os.Exit(0)
 }
 
 func TestAdd(t *testing.T) {
@@ -96,12 +93,19 @@ func TestAdd(t *testing.T) {
 		termToAdd string
 		wantResp  []int64
 		wantErr   any
+		cleanup   func(string)
 	}
 	tests := map[string]args{
 		"success": {
 			termToAdd: "你",
 			wantResp:  []int64{2},
 			wantErr:   nil,
+			cleanup: func(termToDelete string) {
+				err := Delete(dbc, termToDelete)
+				if err != nil {
+					t.Fatalf("Error when doing cleanup and deleting %s", termToDelete)
+				}
+			},
 		},
 		"adding duplicate": {
 			termToAdd: "我",
@@ -124,6 +128,9 @@ func TestAdd(t *testing.T) {
 			}
 			if !reflect.DeepEqual(got, test.wantResp) {
 				t.Errorf("Got %v; wanted %v", got, test.wantResp)
+			}
+			if test.cleanup != nil {
+				test.cleanup(test.termToAdd)
 			}
 		})
 	}
@@ -148,13 +155,14 @@ func TestDelete(t *testing.T) {
 		},
 		"term not found in database": {
 			termToDelete: "爱",
-			setup:        func(string) {},
 			wantErr:      errNotFound{},
 		},
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			test.setup(test.termToDelete)
+			if test.setup != nil {
+				test.setup(test.termToDelete)
+			}
 			err := Delete(dbc, test.termToDelete)
 			if test.wantErr != nil && !errors.As(err, &test.wantErr) {
 				t.Errorf("Got error %v, wanted %v", err, test.wantErr)
@@ -165,28 +173,92 @@ func TestDelete(t *testing.T) {
 	}
 }
 
-func TestFindTerm(t *testing.T) {
+func TestFind(t *testing.T) {
 	type args struct {
+		setup      func()
 		termToFind string
-		wantResp   []int64
-		wantErr    error
+		wantResp   map[int64]TermDef
+		wantErr    any
+		cleanup    func()
 	}
 	tests := map[string]args{
-		"success": {
+		"find term": {
 			termToFind: "我",
-			wantResp:   []int64{1},
-			wantErr:    nil,
+			wantResp: map[int64]TermDef{
+				1: {term: "我", definition: ""},
+			},
+			wantErr: nil,
 		},
 		"not found": {
 			termToFind: "她",
-			wantErr:    nil,
+			wantErr:    errNotFound{},
+		},
+		"find all terms with substring": {
+			setup: func() {
+				_, err := Add(dbc, "我们")
+				if err != nil {
+					t.Fatalf("Error when adding term %s", "我们")
+				}
+			},
+			termToFind: "我",
+			wantResp: map[int64]TermDef{
+				1: {term: "我", definition: ""},
+				3: {term: "我们", definition: ""},
+			},
+			wantErr: nil,
+			cleanup: func() {
+				err := Delete(dbc, "我们")
+				if err != nil {
+					t.Fatalf("Error when deleting term %s", "我们")
+				}
+				err = Delete(dbc, "们")
+				if err != nil {
+					t.Fatalf("Error when deleting term %s", "我们")
+				}
+			},
 		},
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			got, err := dbc.findTerm(test.termToFind)
-			if err != test.wantErr {
-				t.Errorf("Got error %v; wanted %v", err, test.wantErr)
+			if test.setup != nil {
+				test.setup()
+			}
+			got, err := Find(dbc, test.termToFind)
+			if test.wantErr != nil && !errors.As(err, &test.wantErr) {
+				t.Errorf("Got error %v, wanted %v", err, test.wantErr)
+			} else if test.wantErr == nil && err != nil {
+				t.Errorf("Got error, wanted nil")
+			}
+			if !reflect.DeepEqual(got, test.wantResp) {
+				t.Errorf("Got %v; wanted %v", got, test.wantResp)
+			}
+			if test.cleanup != nil {
+				test.cleanup()
+			}
+		})
+	}
+}
+
+func TestList(t *testing.T) {
+	type args struct {
+		wantResp map[int64]TermDef
+		wantErr  any
+	}
+	tests := map[string]args{
+		"list": {
+			wantResp: map[int64]TermDef{
+				1: {term: "我", definition: ""},
+			},
+			wantErr: nil,
+		},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			got, err := List(dbc)
+			if test.wantErr != nil && !errors.As(err, &test.wantErr) {
+				t.Errorf("Got error %v, wanted %v", err, test.wantErr)
+			} else if test.wantErr == nil && err != nil {
+				t.Errorf("Got error, wanted nil")
 			}
 			if !reflect.DeepEqual(got, test.wantResp) {
 				t.Errorf("Got %v; wanted %v", got, test.wantResp)
