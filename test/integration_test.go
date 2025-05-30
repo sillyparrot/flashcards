@@ -1,4 +1,4 @@
-package dbinterface
+package test
 
 import (
 	"context"
@@ -10,12 +10,14 @@ import (
 
 	"github.com/docker/go-connections/nat"
 	"github.com/flashcards/database"
+	"github.com/flashcards/dbinterface"
+	"github.com/flashcards/dict"
 	"github.com/go-sql-driver/mysql"
 	testcontainers "github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-var dbc *DatabaseConn
+var dbc *dbinterface.DatabaseConn
 
 func createDbContainer(ctx context.Context, databaseName string) (testcontainers.Container, string, error) {
 	port := "3306"
@@ -73,12 +75,21 @@ func TestMain(m *testing.M) {
 		Addr:   addr,
 		DBName: databaseName,
 	}
-	dbc, err = Connect(cfg, tableName)
+	dbc, err = dbinterface.Connect(cfg, tableName)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	_, err = Add(dbc, "我")
+	dictMap := dict.DictMap{
+		"我": dict.DictionaryEntry{
+			Traditional: "",
+			Simplified:  "我",
+			Pinyin:      "wo",
+			English:     "me",
+		},
+	}
+
+	_, err = dbinterface.Add(dbc, "我", dictMap)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -91,6 +102,7 @@ func TestMain(m *testing.M) {
 func TestAdd(t *testing.T) {
 	type args struct {
 		termToAdd string
+		dictMap   dict.DictMap
 		wantResp  []int64
 		wantErr   any
 		cleanup   func(string)
@@ -98,10 +110,18 @@ func TestAdd(t *testing.T) {
 	tests := map[string]args{
 		"success": {
 			termToAdd: "你",
-			wantResp:  []int64{2},
-			wantErr:   nil,
+			dictMap: dict.DictMap{
+				"你": dict.DictionaryEntry{
+					Traditional: "",
+					Simplified:  "你",
+					Pinyin:      "ni",
+					English:     "you",
+				},
+			},
+			wantResp: []int64{2},
+			wantErr:  nil,
 			cleanup: func(termToDelete string) {
-				err := Delete(dbc, termToDelete)
+				err := dbinterface.Delete(dbc, termToDelete)
 				if err != nil {
 					t.Fatalf("Error when doing cleanup and deleting %s", termToDelete)
 				}
@@ -115,12 +135,12 @@ func TestAdd(t *testing.T) {
 		"unexpected language": {
 			termToAdd: "c",
 			wantResp:  nil,
-			wantErr:   errUnexpectedLanguage{},
+			wantErr:   dbinterface.ErrUnexpectedLanguage{},
 		},
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			got, err := Add(dbc, test.termToAdd)
+			got, err := dbinterface.Add(dbc, test.termToAdd, test.dictMap)
 			if test.wantErr != nil && !errors.As(err, &test.wantErr) {
 				t.Errorf("Got error %v, wanted %v", err, test.wantErr)
 			} else if test.wantErr == nil && err != nil {
@@ -146,7 +166,15 @@ func TestDelete(t *testing.T) {
 		"success": {
 			termToDelete: "你",
 			setup: func(termToAdd string) {
-				_, err := Add(dbc, termToAdd)
+				dictMap := dict.DictMap{
+					"你": dict.DictionaryEntry{
+						Traditional: "",
+						Simplified:  "你",
+						Pinyin:      "ni",
+						English:     "you",
+					},
+				}
+				_, err := dbinterface.Add(dbc, termToAdd, dictMap)
 				if err != nil {
 					t.Fatalf("Error when adding term %s", termToAdd)
 				}
@@ -155,7 +183,7 @@ func TestDelete(t *testing.T) {
 		},
 		"term not found in database": {
 			termToDelete: "爱",
-			wantErr:      errNotFound{},
+			wantErr:      dbinterface.ErrNotFound{},
 		},
 	}
 	for name, test := range tests {
@@ -163,7 +191,7 @@ func TestDelete(t *testing.T) {
 			if test.setup != nil {
 				test.setup(test.termToDelete)
 			}
-			err := Delete(dbc, test.termToDelete)
+			err := dbinterface.Delete(dbc, test.termToDelete)
 			if test.wantErr != nil && !errors.As(err, &test.wantErr) {
 				t.Errorf("Got error %v, wanted %v", err, test.wantErr)
 			} else if test.wantErr == nil && err != nil {
@@ -177,43 +205,51 @@ func TestFind(t *testing.T) {
 	type args struct {
 		setup      func()
 		termToFind string
-		wantResp   map[int64]TermDef
+		wantResp   map[int64]dbinterface.TermDef
 		wantErr    any
 		cleanup    func()
 	}
 	tests := map[string]args{
 		"find term": {
 			termToFind: "我",
-			wantResp: map[int64]TermDef{
-				1: {term: "我", definition: ""},
+			wantResp: map[int64]dbinterface.TermDef{
+				1: {Term: "我", Definition: "me"},
 			},
 			wantErr: nil,
 		},
 		"not found": {
 			termToFind: "她",
-			wantErr:    errNotFound{},
+			wantErr:    dbinterface.ErrNotFound{},
 		},
 		"find all terms with substring": {
 			setup: func() {
-				_, err := Add(dbc, "我们")
+				dictMap := dict.DictMap{
+					"我们": dict.DictionaryEntry{
+						Traditional: "",
+						Simplified:  "我们",
+						Pinyin:      "women",
+						English:     "us, we",
+					},
+				}
+				_, err := dbinterface.Add(dbc, "我们", dictMap)
 				if err != nil {
 					t.Fatalf("Error when adding term %s", "我们")
 				}
 			},
 			termToFind: "我",
-			wantResp: map[int64]TermDef{
-				1: {term: "我", definition: ""},
-				3: {term: "我们", definition: ""},
+			wantResp: map[int64]dbinterface.TermDef{
+				1: {Term: "我", Definition: "me"},
+				3: {Term: "我们", Definition: "us, we"},
 			},
 			wantErr: nil,
 			cleanup: func() {
-				err := Delete(dbc, "我们")
+				err := dbinterface.Delete(dbc, "我们")
 				if err != nil {
 					t.Fatalf("Error when deleting term %s", "我们")
 				}
-				err = Delete(dbc, "们")
+				err = dbinterface.Delete(dbc, "们")
 				if err != nil {
-					t.Fatalf("Error when deleting term %s", "我们")
+					t.Fatalf("Error when deleting term %s", "们")
 				}
 			},
 		},
@@ -223,7 +259,7 @@ func TestFind(t *testing.T) {
 			if test.setup != nil {
 				test.setup()
 			}
-			got, err := Find(dbc, test.termToFind)
+			got, err := dbinterface.Find(dbc, test.termToFind)
 			if test.wantErr != nil && !errors.As(err, &test.wantErr) {
 				t.Errorf("Got error %v, wanted %v", err, test.wantErr)
 			} else if test.wantErr == nil && err != nil {
@@ -241,20 +277,20 @@ func TestFind(t *testing.T) {
 
 func TestList(t *testing.T) {
 	type args struct {
-		wantResp map[int64]TermDef
+		wantResp map[int64]dbinterface.TermDef
 		wantErr  any
 	}
 	tests := map[string]args{
 		"list": {
-			wantResp: map[int64]TermDef{
-				1: {term: "我", definition: ""},
+			wantResp: map[int64]dbinterface.TermDef{
+				1: {Term: "我", Definition: "me"},
 			},
 			wantErr: nil,
 		},
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			got, err := List(dbc)
+			got, err := dbinterface.List(dbc)
 			if test.wantErr != nil && !errors.As(err, &test.wantErr) {
 				t.Errorf("Got error %v, wanted %v", err, test.wantErr)
 			} else if test.wantErr == nil && err != nil {

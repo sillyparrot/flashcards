@@ -2,19 +2,19 @@ package dbinterface
 
 import "fmt"
 
-type errNotFound struct {
+type ErrNotFound struct {
 	term string
 }
 
-func (e *errNotFound) Error() string {
+func (e *ErrNotFound) Error() string {
 	return fmt.Sprintf("Unable to find %q", e.term)
 }
 
-type errUnexpectedLanguage struct {
+type ErrUnexpectedLanguage struct {
 	expectedLanguage string
 	term             string
 }
 
-func (e *errUnexpectedLanguage) Error() string {
+func (e *ErrUnexpectedLanguage) Error() string {
 	return fmt.Sprintf("%q is not in expected language of %s", e.term, e.expectedLanguage)
 }

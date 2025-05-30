@@ -11,6 +11,13 @@
             "DBUSER": "flashcard",
             "DBPASS": "flash-User9-success"
         }
+    },
+    {
+        "name": "Run rando file",
+        "type": "go",
+        "request": "launch",
+        "program": "rando/rando.go",
+        "console": "integratedTerminal",
     }
     ]
 }

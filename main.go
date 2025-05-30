@@ -7,10 +7,11 @@ import (
 	"sort"
 
 	"github.com/flashcards/dbinterface"
+	"github.com/flashcards/dict"
 	"github.com/go-sql-driver/mysql"
 )
 
-func add(dbc *dbinterface.DatabaseConn) {
+func add(dbc *dbinterface.DatabaseConn, dictMap dict.DictMap) {
 	fmt.Println("Enter the term(s) you want to add to the database. Type menu to return to menu.")
 	for {
 		var input string
@@ -21,7 +22,7 @@ func add(dbc *dbinterface.DatabaseConn) {
 		if input == "menu" {
 			return
 		}
-		ids, err := dbinterface.Add(dbc, input)
+		ids, err := dbinterface.Add(dbc, input, dictMap)
 		if err != nil {
 			log.Printf("Add error: %v", err)
 		}
@@ -109,6 +110,11 @@ func main() {
 		log.Fatalf("Connect error: %v", err)
 	}
 
+	dictMap, err := dict.ParseDict("dict/cedict_ts.u8")
+	if err != nil {
+		log.Fatalf("Dictionary parse error: %v", err)
+	}
+
 	for {
 		fmt.Println("Select the operation you want to perform:")
 		fmt.Println("1. Add")
@@ -123,7 +129,7 @@ func main() {
 		}
 		switch input {
 		case "1":
-			add(dbc)
+			add(dbc, dictMap)
 		case "2":
 			delete(dbc)
 		case "3":

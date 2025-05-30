@@ -32,7 +32,7 @@ func (dbc *DatabaseConn) findTerm(termToFind string) ([]int64, error) {
 	}
 
 	if len(ids) == 0 {
-		return nil, &errNotFound{term: termToFind}
+		return nil, &ErrNotFound{term: termToFind}
 	}
 
 	return ids, nil
@@ -54,14 +54,14 @@ func (dbc *DatabaseConn) findAllTermsWithSubstring(termToFind string) (map[int64
 		if err := rows.Scan(&id, &term, &def); err != nil {
 			return nil, fmt.Errorf("findAllTermsWithSubstring %q: %v", termToFind, err)
 		}
-		terms[id] = TermDef{term: term, definition: def}
+		terms[id] = TermDef{Term: term, Definition: def}
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("findAllTermsWithSubstring %q: %v", termToFind, err)
 	}
 
 	if len(terms) == 0 {
-		return nil, &errNotFound{term: termToFind}
+		return nil, &ErrNotFound{term: termToFind}
 	}
 
 	return terms, nil
@@ -115,15 +115,15 @@ func (dbc *DatabaseConn) checkForGaps() error {
 	return nil
 }
 
-func (dbc *DatabaseConn) addTerm(term string) (int64, error) {
+func (dbc *DatabaseConn) addTerm(term string, definition string) (int64, error) {
 	var exec string
 	var insertId int64
 	if len(dbc.sequenceGaps) > 0 {
 		fmt.Println("Inserting into sequence gap")
 		insertId = dbc.sequenceGaps[0]
-		exec = fmt.Sprintf("INSERT INTO %s (id, term, definition) VALUES (%d, '%s', '%s')", dbc.tableName, insertId, term, "")
+		exec = fmt.Sprintf("INSERT INTO %s (id, term, definition) VALUES (%d, '%s', '%s')", dbc.tableName, insertId, term, definition)
 	} else {
-		exec = fmt.Sprintf("INSERT INTO %s (term, definition) VALUES ('%s', '%s')", dbc.tableName, term, "")
+		exec = fmt.Sprintf("INSERT INTO %s (term, definition) VALUES ('%s', '%s')", dbc.tableName, term, definition)
 	}
 	result, err := dbc.db.Exec(exec)
 	if err != nil {
@@ -189,7 +189,7 @@ func (dbc *DatabaseConn) listAll() (map[int64]TermDef, error) {
 		if err := rows.Scan(&id, &term, &def); err != nil {
 			return nil, fmt.Errorf("listAll: %v", err)
 		}
-		allTerms[id] = TermDef{term: term, definition: def}
+		allTerms[id] = TermDef{Term: term, Definition: def}
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("listAll: %v", err)

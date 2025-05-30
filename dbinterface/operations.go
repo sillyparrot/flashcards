@@ -3,16 +3,17 @@ package dbinterface
 import (
 	"database/sql"
 	"errors"
-	"fmt"
+	"log"
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/flashcards/dict"
 	"github.com/go-sql-driver/mysql"
 )
 
 type TermDef struct {
-	term       string
-	definition string
+	Term       string
+	Definition string
 }
 
 func Connect(cfg mysql.Config, tableName string) (*DatabaseConn, error) {
@@ -25,7 +26,7 @@ func Connect(cfg mysql.Config, tableName string) (*DatabaseConn, error) {
 	if err != nil {
 		return &DatabaseConn{}, err
 	}
-	fmt.Println("Connected!")
+	log.Println("Connected!")
 
 	databaseConn := &DatabaseConn{
 		db:           db,
@@ -34,7 +35,7 @@ func Connect(cfg mysql.Config, tableName string) (*DatabaseConn, error) {
 	}
 
 	if err = databaseConn.checkForGaps(); err != nil {
-		fmt.Printf("%v", err)
+		log.Printf("%v", err)
 	}
 	return databaseConn, nil
 }
@@ -42,31 +43,38 @@ func Connect(cfg mysql.Config, tableName string) (*DatabaseConn, error) {
 func verifyLanguage(term string) error {
 	for _, c := range term {
 		if !unicode.Is(unicode.Han, c) {
-			return &errUnexpectedLanguage{expectedLanguage: "Chinese", term: string(c)}
+			return &ErrUnexpectedLanguage{expectedLanguage: "Chinese", term: string(c)}
 		}
 	}
 	return nil
 }
 
-func addIfNotDuplicate(dbc *DatabaseConn, term string) (*int64, error) {
+func addIfNotDuplicate(dbc *DatabaseConn, term string, dictMap dict.DictMap) (*int64, error) {
 	foundId, err := dbc.findTerm(term)
-	var notFound *errNotFound
+	var notFound *ErrNotFound
 	if !errors.As(err, &notFound) && err != nil {
 		return nil, err
 	}
 	if len(foundId) != 0 {
-		fmt.Printf("%q already exists at %v\n", term, foundId)
+		log.Printf("%q already exists at %v\n", term, foundId)
 		return nil, nil
 	}
 
-	id, err := dbc.addTerm(term)
+	def, inDict := dictMap.GetDefinition(term)
+	if !inDict {
+		log.Printf("%q not found in dictionary", term)
+	} else {
+		log.Printf("%q found in dictionary, definition: %q", term, def)
+	}
+
+	id, err := dbc.addTerm(term, def)
 	if err != nil {
 		return nil, err
 	}
 	return &id, nil
 }
 
-func Add(dbc *DatabaseConn, term string) ([]int64, error) {
+func Add(dbc *DatabaseConn, term string, dictMap dict.DictMap) ([]int64, error) {
 	var addedIds []int64
 	err := verifyLanguage(term)
 	if err != nil {
@@ -74,7 +82,7 @@ func Add(dbc *DatabaseConn, term string) ([]int64, error) {
 	}
 
 	for _, c := range term {
-		id, err := addIfNotDuplicate(dbc, string(c))
+		id, err := addIfNotDuplicate(dbc, string(c), dictMap)
 		if err != nil {
 			return nil, err
 		}
@@ -84,7 +92,7 @@ func Add(dbc *DatabaseConn, term string) ([]int64, error) {
 	}
 
 	if utf8.RuneCountInString(term) > 1 {
-		id, err := addIfNotDuplicate(dbc, term)
+		id, err := addIfNotDuplicate(dbc, term, dictMap)
 		if err != nil {
 			return nil, err
 		}
